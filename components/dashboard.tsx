@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import useSWR from "swr";
@@ -27,8 +27,8 @@ import {
   type LunchMoneyUser,
 } from "@/lib/lunch-money-client";
 
-const currentYear = new Date().getFullYear();
-const previousYear = currentYear - 1;
+const thisYear = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 16 }, (_, i) => thisYear - i);
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -92,9 +92,13 @@ export function Dashboard() {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  /** Compare this year (e.g. 2025) vs this year (e.g. 2024). */
+  const [yearA, setYearA] = useState(thisYear);
+  const [yearB, setYearB] = useState(thisYear - 1);
   /** Chart selection: date range (YYYY-MM-DD) to highlight in table; single day when clicked. */
   const [chartSelection, setChartSelection] = useState<{ start: string; end: string } | null>(null);
   const [excludedCategories, setExcludedCategories] = useState<string[]>([]);
+  const prevYearsRef = useRef({ yearA, yearB });
 
   // Restore API key from sessionStorage on mount
   useEffect(() => {
@@ -110,7 +114,7 @@ export function Dashboard() {
     ([, key]: [string, string]) => fetchUser(key)
   );
 
-  // Fetch current year transactions (client-side Lunch Money API)
+  // Fetch year A transactions (client-side Lunch Money API)
   const {
     data: currentYearData,
     error: currentError,
@@ -121,8 +125,8 @@ export function Dashboard() {
       ? [
         "lm-transactions",
         apiKey,
-        `${currentYear}-01-01`,
-        `${currentYear}-12-31`,
+        `${yearA}-01-01`,
+        `${yearA}-12-31`,
       ]
       : null,
     ([, key, start, end]: [string, string, string, string]) =>
@@ -132,7 +136,7 @@ export function Dashboard() {
     { revalidateOnFocus: false }
   );
 
-  // Fetch previous year transactions (client-side Lunch Money API)
+  // Fetch year B transactions (client-side Lunch Money API)
   const {
     data: previousYearData,
     error: previousError,
@@ -143,8 +147,8 @@ export function Dashboard() {
       ? [
         "lm-transactions",
         apiKey,
-        `${previousYear}-01-01`,
-        `${previousYear}-12-31`,
+        `${yearB}-01-01`,
+        `${yearB}-12-31`,
       ]
       : null,
     ([, key, start, end]: [string, string, string, string]) =>
@@ -165,12 +169,12 @@ export function Dashboard() {
     return processTransactions(
       currentYearData?.transactions ?? [],
       previousYearData?.transactions ?? [],
-      currentYear,
-      previousYear,
+      yearA,
+      yearB,
       undefined,
       undefined
     ).allCategoryNames;
-  }, [currentYearData, previousYearData]);
+  }, [currentYearData, previousYearData, yearA, yearB]);
 
   // Restore category filter: URL params take precedence (for bookmarks); do not override localStorage when applying URL
   useEffect(() => {
@@ -182,6 +186,22 @@ export function Dashboard() {
       setExcludedCategories(loadExcludedCategories());
     }
   }, [searchParams, allCategoryNames]);
+
+  // When year selection changes, reset category filter (all included) and clear storage/URL
+  useEffect(() => {
+    if (prevYearsRef.current.yearA === yearA && prevYearsRef.current.yearB === yearB) return;
+    prevYearsRef.current = { yearA, yearB };
+    setExcludedCategories([]);
+    try {
+      localStorage.setItem(CATEGORY_FILTER_STORAGE_KEY, "[]");
+    } catch {
+      // ignore
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete(URL_PARAM_CATEGORIES);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [yearA, yearB, pathname, router, searchParams]);
 
   // Persist category filter to localStorage and sync selection to URL when user changes it
   const handleExcludedCategoriesChange = useCallback(
@@ -270,8 +290,8 @@ export function Dashboard() {
   const summary = processTransactions(
     currentYearData?.transactions || [],
     previousYearData?.transactions || [],
-    currentYear,
-    previousYear,
+    yearA,
+    yearB,
     selectedMonth ?? undefined,
     excludedCategories.length > 0 ? excludedCategories : undefined
   );
@@ -331,6 +351,37 @@ export function Dashboard() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">Compare</span>
                 <Select
+                  value={String(yearA)}
+                  onValueChange={(v) => setYearA(parseInt(v, 10))}
+                >
+                  <SelectTrigger className="w-[88px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {YEAR_OPTIONS.map((y) => (
+                      <SelectItem key={y} value={String(y)}>
+                        {y}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">vs</span>
+                <Select
+                  value={String(yearB)}
+                  onValueChange={(v) => setYearB(parseInt(v, 10))}
+                >
+                  <SelectTrigger className="w-[88px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {YEAR_OPTIONS.map((y) => (
+                      <SelectItem key={y} value={String(y)}>
+                        {y}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
                   value={selectedMonth === null ? "all" : String(selectedMonth)}
                   onValueChange={(v) =>
                     setSelectedMonth(v === "all" ? null : parseInt(v, 10))
@@ -350,8 +401,8 @@ export function Dashboard() {
                 </Select>
                 <span className="text-sm text-muted-foreground">
                   {selectedMonth === null
-                    ? `${currentYear} vs ${previousYear}`
-                    : `${MONTH_NAMES[selectedMonth - 1]} ${currentYear} vs ${previousYear}`}
+                    ? `${yearA} vs ${yearB}`
+                    : `${MONTH_NAMES[selectedMonth - 1]} ${yearA} vs ${yearB}`}
                 </span>
               </div>
             </div>
@@ -368,13 +419,13 @@ export function Dashboard() {
           {/* Main Chart */}
           <SpendChart
             data={summary.dailyData}
-            currentYear={currentYear}
-            previousYear={previousYear}
+            currentYear={yearA}
+            previousYear={yearB}
             title={summary.month ? "Cumulative Spend (month)" : "Cumulative Spend"}
             description={
               summary.month
-                ? `${MONTH_NAMES[summary.month - 1]} ${currentYear} vs ${previousYear} by day of month`
-                : `${currentYear} vs ${previousYear} spending comparison by day`
+                ? `${MONTH_NAMES[summary.month - 1]} ${yearA} vs ${yearB} by day of month`
+                : `${yearA} vs ${yearB} spending comparison by day`
             }
             totalDaysInView={summary.totalDaysInView}
             isMonthView={!!summary.month}
@@ -386,8 +437,8 @@ export function Dashboard() {
           {/* Weekly transaction table (rows = weeks, columns = years) */}
           <WeeklyTransactionTable
             data={summary.weeklyData}
-            currentYear={currentYear}
-            previousYear={previousYear}
+            currentYear={yearA}
+            previousYear={yearB}
             isMonthView={!!summary.month}
             selection={chartSelection}
           />
@@ -395,15 +446,15 @@ export function Dashboard() {
           {/* Category Breakdown */}
           <CategoryBreakdown
             categories={summary.topCategories}
-            currentYear={currentYear}
-            previousYear={previousYear}
+            currentYear={yearA}
+            previousYear={yearB}
           />
 
           {/* Summary Cards */}
           <SummaryCards
             summary={summary}
-            currentYear={currentYear}
-            previousYear={previousYear}
+            currentYear={yearA}
+            previousYear={yearB}
           />
         </div>
       </main>
