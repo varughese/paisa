@@ -43,7 +43,7 @@ function formatDayShort(dateStr: string): string {
         : day === 3 || day === 23
           ? "rd"
           : "th";
-  return `(${day}${suffix})`;
+  return `${day}${suffix}`;
 }
 
 function CellLineItems({
@@ -67,14 +67,16 @@ function CellLineItems({
         <ul className="space-y-1 px-2 py-1 pr-4">
           {transactions.map((t) => {
             const highlighted = selection != null && isDateInSelection(t.date, selection);
+            const categoryLabel = (t.category_name || "Uncategorized").toUpperCase();
             return (
               <li
                 key={t.id}
                 className={`flex items-baseline justify-between gap-2 rounded px-1 -mx-1 text-xs ${highlighted ? "bg-primary/15 ring-inset ring-1 ring-primary/40" : ""}`}
               >
-                <span className="min-w-0 truncate text-foreground" title={t.payee}>
-                  {t.payee || "Unknown"}
-                  <span className="ml-1 text-muted-foreground">{formatDayShort(t.date)}</span>
+                <span className="flex min-w-0 shrink items-baseline gap-1.5 truncate text-foreground" title={t.payee}>
+                  <span className="text-muted-foreground">{formatDayShort(t.date)}</span>
+                  <span className="shrink-0 font-mono tabular-nums text-muted-foreground">{categoryLabel}</span>
+                  <span className="truncate">{t.payee || "Unknown"}</span>
                 </span>
                 <span className="shrink-0 font-mono tabular-nums text-muted-foreground">
                   ${formatAmount(t.amount)}
@@ -96,7 +98,7 @@ export function WeeklyTransactionTable({
   selection = null,
 }: WeeklyTransactionTableProps) {
   const weekLabel = (week: number) =>
-    isMonthView ? `Week ${week}` : `Week ${week}`;
+    isMonthView ? `Wk ${week}` : `Wk ${week}`;
 
   return (
     <Card className="border-border/60">
@@ -111,9 +113,9 @@ export function WeeklyTransactionTable({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[100px] shrink-0">Week</TableHead>
-                <TableHead className="w-[240px] min-w-[200px]">{currentYear}</TableHead>
-                <TableHead className="w-[240px] min-w-[200px]">{previousYear}</TableHead>
+                <TableHead className="w-[10px] shrink-0">Week</TableHead>
+                <TableHead className="min-w-[200px]">{currentYear}</TableHead>
+                <TableHead className="min-w-[200px]">{previousYear}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -126,7 +128,7 @@ export function WeeklyTransactionTable({
               ) : (
                 data.map((row) => (
                   <TableRow key={row.week} className="align-top">
-                    <TableCell className="max-w-[100px] align-top font-medium text-muted-foreground pt-3">
+                    <TableCell className="max-w-[20px] align-top font-medium text-muted-foreground pt-3">
                       {weekLabel(row.week)}
                     </TableCell>
                     <TableCell className="max-w-[240px] align-top overflow-hidden pt-3">

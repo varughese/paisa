@@ -2,15 +2,17 @@
 
 import * as React from "react";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { Filter, ChevronDown } from "lucide-react";
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 interface CategoryFilterProps {
   /** All category names to show in the list */
@@ -18,6 +20,8 @@ interface CategoryFilterProps {
   /** Category names to exclude from the dashboard (unchecked in UI) */
   excludedCategories: string[];
   onExcludedChange: (excluded: string[]) => void;
+  /** Current-year spend per category for the selected range (for label totals) */
+  categoryTotals?: Record<string, number>;
   className?: string;
 }
 
@@ -25,9 +29,9 @@ export function CategoryFilter({
   allCategories,
   excludedCategories,
   onExcludedChange,
+  categoryTotals,
   className,
 }: CategoryFilterProps) {
-  const [open, setOpen] = React.useState(false);
   const excludedSet = React.useMemo(
     () => new Set(excludedCategories),
     [excludedCategories]
@@ -41,75 +45,56 @@ export function CategoryFilter({
     }
   };
 
-  const includedCount = allCategories.length - excludedCategories.length;
-  const label =
-    excludedCategories.length === 0
-      ? "All categories"
-      : `${includedCount} of ${allCategories.length} categories`;
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn(
-            "w-full justify-between font-normal sm:w-[220px]",
-            excludedCategories.length > 0 && "border-primary/50 text-foreground",
-            className
-          )}
-        >
-            <span className="flex items-center gap-2 truncate">
-            <Filter className="h-3.5 w-3 shrink-0 text-muted-foreground" aria-hidden />
-            Include: {label}
-          </span>
-          <ChevronDown className="h-3.5 w-3 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[260px] p-0" align="start">
-        <div className="border-b border-border/60 px-3 py-2">
-          <p className="text-xs font-medium text-muted-foreground">
-            Uncheck categories to exclude them from totals and charts
-          </p>
+    <div className={cn("w-full space-y-2", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label className="text-sm font-medium text-muted-foreground">
+          Include
+        </Label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+            onClick={() => onExcludedChange([])}
+          >
+            Select all
+          </button>
+          <span className="text-muted-foreground/60">·</span>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+            onClick={() => onExcludedChange([...allCategories])}
+          >
+            Deselect all
+          </button>
         </div>
-        <div className="h-[280px] overflow-hidden">
-          <ScrollArea className="h-full w-full">
-            <div className="flex flex-col gap-0 p-1">
-              {allCategories.map((name) => (
-                <label
-                  key={name}
-                  className={cn(
-                    "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50",
-                    excludedSet.has(name) && "opacity-60"
-                  )}
-                >
-                  <Checkbox
-                    checked={!excludedSet.has(name)}
-                    onCheckedChange={() => toggle(name)}
-                    onPointerDown={(e) => e.preventDefault()}
-                  />
-                  <span className="truncate">{name}</span>
-                </label>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-        {excludedCategories.length > 0 && (
-          <div className="border-t border-border/60 p-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-full text-xs"
-              onClick={() => {
-                onExcludedChange([]);
-                setOpen(false);
-              }}
-            >
-              Show all categories
-            </Button>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {allCategories.map((name) => (
+          <label
+            key={name}
+            className={cn(
+              "flex cursor-pointer items-center gap-2 rounded-sm py-1 pr-1 text-sm hover:bg-accent/50",
+              excludedSet.has(name) && "opacity-60"
+            )}
+          >
+            <Checkbox
+              checked={!excludedSet.has(name)}
+              onCheckedChange={() => toggle(name)}
+              onPointerDown={(e) => e.preventDefault()}
+            />
+            <span>
+              {name}
+              {categoryTotals && name in categoryTotals && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  ({formatCurrency(categoryTotals[name])})
+                </span>
+              )}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }

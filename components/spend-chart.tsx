@@ -274,7 +274,7 @@ export function SpendChart({
                 dataKey="currentYear"
                 stroke="oklch(0.55 0.15 250)"
                 strokeWidth={2.5}
-                dot={false}
+                dot={{ r: 4, strokeWidth: 2 }}
                 activeDot={interactive ? { r: 5, strokeWidth: 2 } : { r: 4, strokeWidth: 2 }}
                 name="currentYear"
               />
@@ -283,7 +283,7 @@ export function SpendChart({
                 dataKey="previousYear"
                 stroke="oklch(0.60 0.18 20)"
                 strokeWidth={2.5}
-                dot={false}
+                dot={{ r: 4, strokeWidth: 2 }}
                 activeDot={interactive ? { r: 5, strokeWidth: 2 } : { r: 4, strokeWidth: 2 }}
                 name="previousYear"
               />

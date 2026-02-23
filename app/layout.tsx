@@ -7,7 +7,7 @@ const _inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" });
 
 export const metadata: Metadata = {
-  title: 'Budget dashboard',
+  title: 'Paisa - Budget dashboard',
   description: 'Compare your spending year over year with Lunch Money',
   icons: {
     icon: [

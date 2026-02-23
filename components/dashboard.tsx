@@ -98,11 +98,11 @@ export function Dashboard() {
   } = useSWR<{ transactions: Transaction[] }>(
     apiKey
       ? [
-          "lm-transactions",
-          apiKey,
-          `${currentYear}-01-01`,
-          `${currentYear}-12-31`,
-        ]
+        "lm-transactions",
+        apiKey,
+        `${currentYear}-01-01`,
+        `${currentYear}-12-31`,
+      ]
       : null,
     ([, key, start, end]: [string, string, string, string]) =>
       fetchTransactions(key, start, end).then((transactions) => ({
@@ -120,11 +120,11 @@ export function Dashboard() {
   } = useSWR<{ transactions: Transaction[] }>(
     apiKey
       ? [
-          "lm-transactions",
-          apiKey,
-          `${previousYear}-01-01`,
-          `${previousYear}-12-31`,
-        ]
+        "lm-transactions",
+        apiKey,
+        `${previousYear}-01-01`,
+        `${previousYear}-12-31`,
+      ]
       : null,
     ([, key, start, end]: [string, string, string, string]) =>
       fetchTransactions(key, start, end).then((transactions) => ({
@@ -250,46 +250,43 @@ export function Dashboard() {
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
         <div className="flex flex-col gap-6">
           {/* Month and category filters */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Compare</span>
-              <Select
-                value={selectedMonth === null ? "all" : String(selectedMonth)}
-                onValueChange={(v) =>
-                  setSelectedMonth(v === "all" ? null : parseInt(v, 10))
-                }
-              >
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="All year" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All year</SelectItem>
-                  {MONTH_NAMES.map((name, i) => (
-                    <SelectItem key={name} value={String(i + 1)}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-muted-foreground">
-                {selectedMonth === null
-                  ? `${currentYear} vs ${previousYear}`
-                  : `${MONTH_NAMES[selectedMonth - 1]} ${currentYear} vs ${previousYear}`}
-              </span>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Compare</span>
+                <Select
+                  value={selectedMonth === null ? "all" : String(selectedMonth)}
+                  onValueChange={(v) =>
+                    setSelectedMonth(v === "all" ? null : parseInt(v, 10))
+                  }
+                >
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="All year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All year</SelectItem>
+                    {MONTH_NAMES.map((name, i) => (
+                      <SelectItem key={name} value={String(i + 1)}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">
+                  {selectedMonth === null
+                    ? `${currentYear} vs ${previousYear}`
+                    : `${MONTH_NAMES[selectedMonth - 1]} ${currentYear} vs ${previousYear}`}
+                </span>
+              </div>
             </div>
             <CategoryFilter
               allCategories={summary.allCategoryNames}
               excludedCategories={excludedCategories}
               onExcludedChange={handleExcludedCategoriesChange}
+              categoryTotals={summary.categoryTotals}
             />
           </div>
 
-          {/* Summary Cards */}
-          <SummaryCards
-            summary={summary}
-            currentYear={currentYear}
-            previousYear={previousYear}
-          />
 
           {/* Main Chart */}
           <SpendChart
@@ -320,6 +317,13 @@ export function Dashboard() {
           {/* Category Breakdown */}
           <CategoryBreakdown
             categories={summary.topCategories}
+            currentYear={currentYear}
+            previousYear={previousYear}
+          />
+
+          {/* Summary Cards */}
+          <SummaryCards
+            summary={summary}
             currentYear={currentYear}
             previousYear={previousYear}
           />

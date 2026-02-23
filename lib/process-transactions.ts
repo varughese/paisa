@@ -58,6 +58,8 @@ export interface SpendSummary {
   totalDaysInView: number;
   /** Weekly breakdown for transaction table (week, totals and counts per year) */
   weeklyData: WeeklyDataEntry[];
+  /** Current year spend per category for the range (before category exclusion), for filter labels */
+  categoryTotals: Record<string, number>;
 }
 
 export function getWeekNumber(dateStr: string): number {
@@ -147,6 +149,19 @@ export function processTransactions(
     }
     return [...set].sort((a, b) => a.localeCompare(b));
   })();
+
+  // Current-year spend per category for the range (before exclusion), for filter labels
+  const categoryTotals: Record<string, number> = {};
+  for (const t of currentExpenses) {
+    const cat = t.category_name || "Uncategorized";
+    categoryTotals[cat] = (categoryTotals[cat] || 0) + Math.abs(parseFloat(t.amount));
+  }
+  for (const name of allCategoryNames) {
+    if (!(name in categoryTotals)) categoryTotals[name] = 0;
+  }
+  for (const k of Object.keys(categoryTotals)) {
+    categoryTotals[k] = Math.round(categoryTotals[k]);
+  }
 
   // Optional category exclusion
   if (excludeCategoryNames?.length) {
@@ -332,5 +347,6 @@ export function processTransactions(
     month,
     totalDaysInView,
     weeklyData,
+    categoryTotals,
   };
 }
