@@ -11,9 +11,33 @@ import {
   ResponsiveContainer,
   Legend,
   ReferenceArea,
+  ReferenceLine,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { DailyData } from "@/lib/process-transactions";
+
+/** Renders a tiny filled dot only when this point's value is greater than the previous day's. */
+function dotWhenHigher(
+  data: DailyData[],
+  dataKey: "currentYear" | "previousYear",
+  baseDotProps: { r: number; fill: string }
+) {
+  return (props: { cx?: number; cy?: number; payload?: DailyData; index?: number }) => {
+    const { cx, cy, payload, index = 0 } = props;
+    if (index === 0 || cx == null || cy == null || !payload) return null;
+    const prev = data[index - 1];
+    if (!prev || payload[dataKey] <= prev[dataKey]) return null;
+    return (
+      <circle
+        key={index}
+        cx={cx}
+        cy={cy}
+        r={baseDotProps.r}
+        fill={baseDotProps.fill}
+      />
+    );
+  };
+}
 
 interface SpendChartProps {
   data: DailyData[];
@@ -23,6 +47,8 @@ interface SpendChartProps {
   description?: string;
   totalDaysInView?: number;
   isMonthView?: boolean;
+  /** When set, draw a vertical gray line at this day (1-based) for "today" in current year. */
+  currentDayNum?: number | null;
   /** Current selection range (from click or drag); shown as highlight and reflected in table. */
   selectedRange?: { start: string; end: string } | null;
   /** Called when user selects a range (single day on click, range on drag). */
@@ -107,6 +133,7 @@ export function SpendChart({
   description,
   totalDaysInView = 365,
   isMonthView = false,
+  currentDayNum = null,
   selectedRange = null,
   onSelectionChange,
 }: SpendChartProps) {
@@ -269,12 +296,20 @@ export function SpendChart({
                   fill="oklch(0.55 0.15 250 / 0.15)"
                 />
               )}
+              {currentDayNum != null && (
+                <ReferenceLine
+                  x={currentDayNum}
+                  stroke="oklch(0.65 0.02 260)"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
+                />
+              )}
               <Line
                 type="monotone"
                 dataKey="currentYear"
                 stroke="oklch(0.55 0.15 250)"
                 strokeWidth={2.5}
-                dot={{ r: 4, strokeWidth: 2 }}
+                dot={dotWhenHigher(data, "currentYear", { r: 2, fill: "oklch(0.55 0.15 250)" })}
                 activeDot={interactive ? { r: 5, strokeWidth: 2 } : { r: 4, strokeWidth: 2 }}
                 name="currentYear"
               />
@@ -283,7 +318,7 @@ export function SpendChart({
                 dataKey="previousYear"
                 stroke="oklch(0.60 0.18 20)"
                 strokeWidth={2.5}
-                dot={{ r: 4, strokeWidth: 2 }}
+                dot={dotWhenHigher(data, "previousYear", { r: 2, fill: "oklch(0.60 0.18 20)" })}
                 activeDot={interactive ? { r: 5, strokeWidth: 2 } : { r: 4, strokeWidth: 2 }}
                 name="previousYear"
               />

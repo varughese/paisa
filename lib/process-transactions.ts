@@ -60,6 +60,10 @@ export interface SpendSummary {
   weeklyData: WeeklyDataEntry[];
   /** Current year spend per category for the range (before category exclusion), for filter labels */
   categoryTotals: Record<string, number>;
+  /** Previous year spend per category for the range (before category exclusion), for filter labels */
+  categoryTotalsPreviousYear: Record<string, number>;
+  /** When viewing current year, day index (1-based) at which to draw "today" separator; null otherwise */
+  currentDayNum: number | null;
 }
 
 export function getWeekNumber(dateStr: string): number {
@@ -150,17 +154,26 @@ export function processTransactions(
     return [...set].sort((a, b) => a.localeCompare(b));
   })();
 
-  // Current-year spend per category for the range (before exclusion), for filter labels
+  // Current-year and previous-year spend per category for the range (before exclusion), for filter labels
   const categoryTotals: Record<string, number> = {};
+  const categoryTotalsPreviousYear: Record<string, number> = {};
   for (const t of currentExpenses) {
     const cat = t.category_name || "Uncategorized";
     categoryTotals[cat] = (categoryTotals[cat] || 0) + Math.abs(parseFloat(t.amount));
   }
+  for (const t of previousExpenses) {
+    const cat = t.category_name || "Uncategorized";
+    categoryTotalsPreviousYear[cat] = (categoryTotalsPreviousYear[cat] || 0) + Math.abs(parseFloat(t.amount));
+  }
   for (const name of allCategoryNames) {
     if (!(name in categoryTotals)) categoryTotals[name] = 0;
+    if (!(name in categoryTotalsPreviousYear)) categoryTotalsPreviousYear[name] = 0;
   }
   for (const k of Object.keys(categoryTotals)) {
     categoryTotals[k] = Math.round(categoryTotals[k]);
+  }
+  for (const k of Object.keys(categoryTotalsPreviousYear)) {
+    categoryTotalsPreviousYear[k] = Math.round(categoryTotalsPreviousYear[k]);
   }
 
   // Optional category exclusion
@@ -204,7 +217,8 @@ export function processTransactions(
         currentYear
       )
       : maxDays;
-  const totalDaysInView = Math.min(maxDays, currentDayNum);
+  /** Show full year/month; gray line in chart marks "today" when viewing current year. */
+  const totalDaysInView = maxDays;
 
   // Accumulate daily spend (day = day of year or day of month)
   const currentDaily: Record<number, number> = {};
@@ -242,13 +256,17 @@ export function processTransactions(
     previousCategorySpend[cat] = (previousCategorySpend[cat] || 0) + Math.abs(parseFloat(tx.amount));
   }
 
-  // Build cumulative daily data with dateStr for tooltip/click
+  // Build cumulative daily data with dateStr for tooltip/click (full year; current year flat after today)
   const dailyData: DailyData[] = [];
   let cumulativeCurrent = 0;
   let cumulativePrevious = 0;
+  let totalCurrentYearValue = 0;
 
   for (let day = 1; day <= totalDaysInView; day++) {
-    cumulativeCurrent += currentDaily[day] || 0;
+    if (day <= currentDayNum || !isCurrentYear) {
+      cumulativeCurrent += currentDaily[day] || 0;
+      if (day === currentDayNum && isCurrentYear) totalCurrentYearValue = cumulativeCurrent;
+    }
     cumulativePrevious += previousDaily[day] || 0;
     const dateStr = month
       ? `${currentYear}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
@@ -261,8 +279,10 @@ export function processTransactions(
     });
   }
 
-  // Totals
-  const totalCurrentYear = Math.round(cumulativeCurrent);
+  // Totals: current year YTD when viewing current year, else full period; previous year always full period
+  const totalCurrentYear = Math.round(
+    isCurrentYear ? totalCurrentYearValue : cumulativeCurrent
+  );
   const totalPreviousYear = Math.round(cumulativePrevious);
   const difference = totalCurrentYear - totalPreviousYear;
   const percentChange =
@@ -315,12 +335,12 @@ export function processTransactions(
     previousByWeek[w].total += amount;
     previousByWeek[w].transactions.push(tx);
   }
-  // Sort transactions by date desc within each week
+  // Sort transactions by date asc within each week (oldest first)
   for (const rec of Object.values(currentByWeek)) {
-    rec.transactions.sort((a, b) => b.date.localeCompare(a.date));
+    rec.transactions.sort((a, b) => a.date.localeCompare(b.date));
   }
   for (const rec of Object.values(previousByWeek)) {
-    rec.transactions.sort((a, b) => b.date.localeCompare(a.date));
+    rec.transactions.sort((a, b) => a.date.localeCompare(b.date));
   }
   const allWeeks = [...new Set([...Object.keys(currentByWeek), ...Object.keys(previousByWeek)].map(Number))].sort((a, b) => a - b);
   const weeklyData: WeeklyDataEntry[] = allWeeks.map((week) => ({
@@ -348,5 +368,7 @@ export function processTransactions(
     totalDaysInView,
     weeklyData,
     categoryTotals,
+    categoryTotalsPreviousYear,
+    currentDayNum: isCurrentYear && (month == null || isCurrentMonth) ? currentDayNum : null,
   };
 }

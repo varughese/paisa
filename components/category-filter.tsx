@@ -22,6 +22,8 @@ interface CategoryFilterProps {
   onExcludedChange: (excluded: string[]) => void;
   /** Current-year spend per category for the selected range (for label totals) */
   categoryTotals?: Record<string, number>;
+  /** Previous-year spend per category for the selected range (for label totals) */
+  categoryTotalsPreviousYear?: Record<string, number>;
   className?: string;
 }
 
@@ -30,12 +32,17 @@ export function CategoryFilter({
   excludedCategories,
   onExcludedChange,
   categoryTotals,
+  categoryTotalsPreviousYear,
   className,
 }: CategoryFilterProps) {
+  const [showCurrentYear, setShowCurrentYear] = React.useState(true);
   const excludedSet = React.useMemo(
     () => new Set(excludedCategories),
     [excludedCategories]
   );
+
+  const totalsToShow = showCurrentYear ? categoryTotals : categoryTotalsPreviousYear;
+  const hasTotals = categoryTotals != null || categoryTotalsPreviousYear != null;
 
   const toggle = (name: string) => {
     if (excludedSet.has(name)) {
@@ -51,7 +58,7 @@ export function CategoryFilter({
         <Label className="text-sm font-medium text-muted-foreground">
           Include
         </Label>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             className="text-xs text-muted-foreground underline-offset-4 hover:underline"
@@ -67,6 +74,35 @@ export function CategoryFilter({
           >
             Deselect all
           </button>
+          {hasTotals && (
+            <>
+              <span className="text-muted-foreground/60">·</span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>Show:</span>
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded px-1.5 py-0.5 underline-offset-2 hover:underline",
+                    showCurrentYear && "bg-accent font-medium text-foreground"
+                  )}
+                  onClick={() => setShowCurrentYear(true)}
+                >
+                  This year
+                </button>
+                <span className="text-muted-foreground/60">/</span>
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded px-1.5 py-0.5 underline-offset-2 hover:underline",
+                    !showCurrentYear && "bg-accent font-medium text-foreground"
+                  )}
+                  onClick={() => setShowCurrentYear(false)}
+                >
+                  Last year
+                </button>
+              </span>
+            </>
+          )}
         </div>
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -85,10 +121,10 @@ export function CategoryFilter({
             />
             <span>
               {name}
-              {categoryTotals && name in categoryTotals && (
+              {totalsToShow && name in totalsToShow && (
                 <span className="text-muted-foreground">
                   {" "}
-                  ({formatCurrency(categoryTotals[name])})
+                  ({formatCurrency(totalsToShow[name])})
                 </span>
               )}
             </span>

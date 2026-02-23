@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
@@ -10,7 +11,16 @@ export function DashboardSkeleton() {
       <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex flex-col gap-1">
-            <Skeleton className="h-5 w-36" />
+            <div className="flex items-center gap-2">
+              <Image
+                src="/icon.png"
+                alt=""
+                width={24}
+                height={24}
+                className="size-6 shrink-0"
+              />
+              <Skeleton className="h-5 w-24" />
+            </div>
             <Skeleton className="h-3 w-24" />
           </div>
           <div className="flex items-center gap-2">

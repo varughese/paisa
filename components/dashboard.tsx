@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import Image from "next/image";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import useSWR from "swr";
 import { ApiKeyForm } from "@/components/api-key-form";
 import { SpendChart } from "@/components/spend-chart";
@@ -34,6 +36,9 @@ const MONTH_NAMES = [
 ];
 
 const CATEGORY_FILTER_STORAGE_KEY = "paisa_excluded_categories";
+const URL_PARAM_CATEGORIES = "categories";
+/** Period separator so the param stays readable (commas get encoded as %2C). */
+const CATEGORIES_SEP = ".";
 
 function loadExcludedCategories(): string[] {
   if (typeof window === "undefined") return [];
@@ -49,7 +54,40 @@ function loadExcludedCategories(): string[] {
   }
 }
 
+/** Build URL query string from included category indices (no param if all included). */
+function buildCategoriesQuery(excluded: string[], allCategoryNames: string[]): string {
+  if (allCategoryNames.length === 0) return "";
+  const excludedSet = new Set(excluded);
+  const includedIndices: number[] = [];
+  allCategoryNames.forEach((name, i) => {
+    if (!excludedSet.has(name)) includedIndices.push(i);
+  });
+  if (includedIndices.length === allCategoryNames.length) return "";
+  const params = new URLSearchParams();
+  params.set(URL_PARAM_CATEGORIES, includedIndices.join(CATEGORIES_SEP));
+  return `?${params.toString()}`;
+}
+
+/** Parse categories=0.1.3 into excluded category names using the full list. */
+function parseCategoriesParam(
+  param: string | null,
+  allCategoryNames: string[]
+): string[] | null {
+  if (param === null || allCategoryNames.length === 0) return null;
+  if (param.trim() === "") return allCategoryNames; // empty = include none
+  const indices = param
+    .split(/[.,]/) // . for readable URLs; , for backward compatibility
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n >= 0 && n < allCategoryNames.length);
+  const includedSet = new Set(indices.map((i) => allCategoryNames[i]));
+  const excluded = allCategoryNames.filter((c) => !includedSet.has(c));
+  return excluded;
+}
+
 export function Dashboard() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -60,26 +98,9 @@ export function Dashboard() {
 
   // Restore API key from sessionStorage on mount
   useEffect(() => {
-    const stored = sessionStorage.getItem("lm_api_key");
+    const stored = localStorage.getItem("lm_api_key");
     if (stored) {
       setApiKey(stored);
-    }
-  }, []);
-
-  // Restore category filter from localStorage on mount
-  useEffect(() => {
-    setExcludedCategories(loadExcludedCategories());
-  }, []);
-
-  // Persist category filter to localStorage when it changes
-  const handleExcludedCategoriesChange = useCallback((excluded: string[]) => {
-    setExcludedCategories(excluded);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem(CATEGORY_FILTER_STORAGE_KEY, JSON.stringify(excluded));
-      } catch {
-        // ignore quota or other storage errors
-      }
     }
   }, []);
 
@@ -133,6 +154,52 @@ export function Dashboard() {
     { revalidateOnFocus: false }
   );
 
+  // All category names (from data, no exclusion) for URL param parsing and building
+  const allCategoryNames = useMemo(() => {
+    if (
+      !currentYearData?.transactions?.length &&
+      !previousYearData?.transactions?.length
+    ) {
+      return [];
+    }
+    return processTransactions(
+      currentYearData?.transactions ?? [],
+      previousYearData?.transactions ?? [],
+      currentYear,
+      previousYear,
+      undefined,
+      undefined
+    ).allCategoryNames;
+  }, [currentYearData, previousYearData]);
+
+  // Restore category filter: URL params take precedence (for bookmarks); do not override localStorage when applying URL
+  useEffect(() => {
+    const categoriesParam = searchParams.get(URL_PARAM_CATEGORIES);
+    if (categoriesParam !== null && allCategoryNames.length > 0) {
+      const excluded = parseCategoriesParam(categoriesParam, allCategoryNames);
+      if (excluded !== null) setExcludedCategories(excluded);
+    } else if (categoriesParam === null) {
+      setExcludedCategories(loadExcludedCategories());
+    }
+  }, [searchParams, allCategoryNames]);
+
+  // Persist category filter to localStorage and sync selection to URL when user changes it
+  const handleExcludedCategoriesChange = useCallback(
+    (excluded: string[]) => {
+      setExcludedCategories(excluded);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(CATEGORY_FILTER_STORAGE_KEY, JSON.stringify(excluded));
+        } catch {
+          // ignore quota or other storage errors
+        }
+      }
+      const query = buildCategoriesQuery(excluded, allCategoryNames);
+      router.replace(`${pathname}${query}`, { scroll: false });
+    },
+    [router, pathname, allCategoryNames]
+  );
+
   const handleConnect = useCallback(async (key: string) => {
     setIsConnecting(true);
     setConnectError(null);
@@ -141,7 +208,7 @@ export function Dashboard() {
       // Validate the key by fetching user info (client-side Lunch Money API)
       await fetchUser(key);
       setApiKey(key);
-      sessionStorage.setItem("lm_api_key", key);
+      localStorage.setItem("lm_api_key", key);
     } catch (err) {
       setConnectError(
         err instanceof Error ? err.message : "Failed to connect. Check your API key."
@@ -153,7 +220,7 @@ export function Dashboard() {
 
   const handleDisconnect = useCallback(() => {
     setApiKey(null);
-    sessionStorage.removeItem("lm_api_key");
+    localStorage.removeItem("lm_api_key");
     setConnectError(null);
   }, []);
 
@@ -215,9 +282,18 @@ export function Dashboard() {
       <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex flex-col">
-            <h1 className="text-base font-semibold text-foreground sm:text-lg">
-              Paisa
-            </h1>
+            <div className="flex items-center gap-2">
+              <Image
+                src="/icon.png"
+                alt=""
+                width={24}
+                height={24}
+                className="size-6 shrink-0"
+              />
+              <h1 className="text-base font-semibold text-foreground sm:text-lg">
+                Paisa
+              </h1>
+            </div>
             {userData && (
               <p className="text-xs text-muted-foreground">
                 {userData.budget_name || userData.user_name}
@@ -284,6 +360,7 @@ export function Dashboard() {
               excludedCategories={excludedCategories}
               onExcludedChange={handleExcludedCategoriesChange}
               categoryTotals={summary.categoryTotals}
+              categoryTotalsPreviousYear={summary.categoryTotalsPreviousYear}
             />
           </div>
 
@@ -301,6 +378,7 @@ export function Dashboard() {
             }
             totalDaysInView={summary.totalDaysInView}
             isMonthView={!!summary.month}
+            currentDayNum={summary.currentDayNum}
             selectedRange={chartSelection}
             onSelectionChange={(start, end) => setChartSelection({ start, end })}
           />

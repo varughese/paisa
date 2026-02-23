@@ -88,7 +88,7 @@ export function ApiKeyForm({ onSubmit, isLoading, error }: ApiKeyFormProps) {
         </Card>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Your API key is only used in this session and never stored on any server.
+          Your API key is stored locally in your browser and never sent to any server except Lunch Money.
         </p>
       </div>
     </div>
