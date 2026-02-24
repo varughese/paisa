@@ -73,6 +73,8 @@ export interface SpendSummary {
   /** All category names that have spend (for filter UI) */
   allCategoryNames: string[];
   currentWeek: number;
+  /** Total comparable weeks in view (52 for year view, 5 for month view). */
+  totalWeeksInView: number;
   currentYearWeeklyAvg: number;
   previousYearWeeklyAvg: number;
   /** When set, data is for this month only (1-12) */
@@ -448,6 +450,7 @@ export function processTransactions(
     topCategories,
     allCategoryNames,
     currentWeek: currentWeekNum,
+    totalWeeksInView: totalWeeksForAvg,
     currentYearWeeklyAvg: Math.round(currentYearWeeklyAvg),
     previousYearWeeklyAvg: Math.round(previousYearWeeklyAvg),
     month,
