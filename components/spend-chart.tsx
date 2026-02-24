@@ -62,65 +62,249 @@ function formatCurrency(value: number): string {
   return `$${value.toFixed(0)}`;
 }
 
+function formatTooltipCurrency(value: number): string {
+  return `$${Math.round(value).toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+}
+
+function formatSignedCurrency(value: number): string {
+  const rounded = Math.round(value);
+  const sign = rounded > 0 ? "+" : rounded < 0 ? "-" : "";
+  return `${sign}$${Math.abs(rounded).toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+}
+
+function toneClassForDelta(value: number): string {
+  if (value > 0) return "text-destructive";
+  if (value < 0) return "text-chart-3";
+  return "text-muted-foreground";
+}
+
+function TooltipYearSection({
+  year,
+  color,
+  cumulative,
+  vsPreviousDay,
+  daySpend,
+  categories,
+}: {
+  year: number;
+  color: string;
+  cumulative: number;
+  vsPreviousDay: number | null;
+  daySpend: number;
+  categories: Array<{ name: string; amount: number }>;
+}) {
+  const visibleCategories = categories.slice(0, 4);
+
+  return (
+    <div className="rounded-md bg-muted/20 px-2 py-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+          <span className="text-xs text-muted-foreground">{year}</span>
+        </div>
+        <span className="font-mono text-sm font-semibold text-card-foreground">
+          {formatTooltipCurrency(cumulative)}
+        </span>
+      </div>
+
+      <div className="mt-1 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-[11px]">
+        <span className="text-muted-foreground">vs previous day</span>
+        <span
+          className={`text-right font-mono ${
+            vsPreviousDay == null
+              ? "text-muted-foreground"
+              : toneClassForDelta(vsPreviousDay)
+          }`}
+        >
+          {vsPreviousDay == null ? "—" : formatSignedCurrency(vsPreviousDay)}
+        </span>
+        <span className="text-muted-foreground">Spend on this day</span>
+        <span className="text-right font-mono text-card-foreground">
+          {formatTooltipCurrency(daySpend)}
+        </span>
+      </div>
+
+      <div className="mt-1.5 border-t border-border/40 pt-1.5">
+        <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+          Category breakdown (day)
+        </p>
+        {visibleCategories.length > 0 ? (
+          <div className="space-y-0.5">
+            {visibleCategories.map((category) => (
+              <div
+                key={`${year}-${category.name}`}
+                className="flex items-center justify-between gap-2 text-[11px]"
+              >
+                <span className="truncate text-card-foreground">{category.name}</span>
+                <span className="font-mono text-card-foreground">
+                  {formatTooltipCurrency(category.amount)}
+                </span>
+              </div>
+            ))}
+            {categories.length > visibleCategories.length && (
+              <p className="pt-0.5 text-right text-[10px] text-muted-foreground">
+                +{categories.length - visibleCategories.length} more categories
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">No spend on this day</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CustomTooltip({
   active,
   payload,
   label,
+  data,
   currentYear,
   previousYear,
   isMonthView,
 }: {
   active?: boolean;
-  payload?: Array<{ value: number; dataKey: string; color: string; payload?: { dateStr?: string } }>;
+  payload?: Array<{
+    value?: number;
+    dataKey?: string;
+    color?: string;
+    payload?: DailyData;
+  }>;
   label?: number;
+  data: DailyData[];
   currentYear: number;
   previousYear: number;
   isMonthView?: boolean;
 }) {
   if (!active || !payload?.length) return null;
-  const dateStr = payload[0]?.payload?.dateStr;
+  const point = payload[0]?.payload;
+  if (!point) return null;
+
+  const dateStr = point.dateStr;
+  const currentEntry = payload.find((entry) => entry.dataKey === "currentYear");
+  const previousEntry = payload.find((entry) => entry.dataKey === "previousYear");
+  const currentValue = Math.round(currentEntry?.value ?? point.currentYear);
+  const previousValue = Math.round(previousEntry?.value ?? point.previousYear);
+  const difference = currentValue - previousValue;
+
+  const currentColor = currentEntry?.color ?? "oklch(0.55 0.15 250)";
+  const previousColor = previousEntry?.color ?? "oklch(0.60 0.18 20)";
+
+  const pointIndex = data.findIndex((d) => d.day === point.day);
+  const previousPoint = pointIndex > 0 ? data[pointIndex - 1] : null;
+  const currentVsPreviousDay =
+    previousPoint != null ? currentValue - previousPoint.currentYear : null;
+  const previousVsPreviousDay =
+    previousPoint != null ? previousValue - previousPoint.previousYear : null;
+  const previousDifference =
+    previousPoint != null
+      ? previousPoint.currentYear - previousPoint.previousYear
+      : null;
+  const differenceVsPreviousDay =
+    previousDifference != null ? difference - previousDifference : null;
+  const visibleDrivers = point.differenceDrivers.slice(0, 5);
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card px-3 py-2.5 shadow-lg">
+    <div className="max-h-[420px] w-[320px] overflow-y-auto rounded-lg border border-border/60 bg-card px-3 py-2.5 shadow-lg">
       <p className="mb-1.5 text-xs font-medium text-muted-foreground">
         {dateStr ?? (isMonthView ? `Day ${label} of month` : `Day ${label}`)}
       </p>
-      {payload.map((entry) => {
-        const year =
-          entry.dataKey === "currentYear" ? currentYear : previousYear;
-        return (
-          <div key={entry.dataKey} className="flex items-center gap-2">
-            <div
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: entry.color }}
-            />
-            <span className="text-xs text-muted-foreground">{year}</span>
-            <span className="font-mono text-sm font-semibold text-card-foreground">
-              ${entry.value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-            </span>
-          </div>
-        );
-      })}
-      {payload.length === 2 && (
-        <div className="mt-1.5 border-t border-border/40 pt-1.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Difference</span>
-            <span
-              className={`font-mono text-xs font-semibold ${
-                payload[0].value - payload[1].value > 0
-                  ? "text-destructive"
-                  : "text-chart-3"
-              }`}
-            >
-              {payload[0].value - payload[1].value > 0 ? "+" : ""}$
-              {Math.abs(payload[0].value - payload[1].value).toLocaleString("en-US", {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0,
-              })}
-            </span>
-          </div>
+      <div className="space-y-1.5">
+        <TooltipYearSection
+          year={currentYear}
+          color={currentColor}
+          cumulative={currentValue}
+          vsPreviousDay={currentVsPreviousDay}
+          daySpend={point.currentDaySpend}
+          categories={point.currentDayCategoryBreakdown}
+        />
+        <TooltipYearSection
+          year={previousYear}
+          color={previousColor}
+          cumulative={previousValue}
+          vsPreviousDay={previousVsPreviousDay}
+          daySpend={point.previousDaySpend}
+          categories={point.previousDayCategoryBreakdown}
+        />
+      </div>
+
+      <div className="mt-2 border-t border-border/40 pt-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">Difference</span>
+          <span
+            className={`font-mono text-xs font-semibold ${toneClassForDelta(
+              difference
+            )}`}
+          >
+            {formatSignedCurrency(difference)}
+          </span>
         </div>
-      )}
+
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">Diff vs previous day</span>
+          <span
+            className={`font-mono text-xs font-semibold ${
+              differenceVsPreviousDay == null
+                ? "text-muted-foreground"
+                : toneClassForDelta(differenceVsPreviousDay)
+            }`}
+          >
+            {differenceVsPreviousDay == null
+              ? "—"
+              : formatSignedCurrency(differenceVsPreviousDay)}
+          </span>
+        </div>
+
+        <div className="mt-1.5 border-t border-border/40 pt-1.5">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
+            What is driving today&apos;s difference
+          </p>
+          {visibleDrivers.length > 0 ? (
+            <div className="space-y-1">
+              {visibleDrivers.map((driver) => (
+                <div key={driver.name} className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="truncate text-card-foreground">
+                      {driver.name}
+                    </span>
+                    <span
+                      className={`font-mono font-medium ${toneClassForDelta(
+                        driver.difference
+                      )}`}
+                    >
+                      {formatSignedCurrency(driver.difference)}
+                    </span>
+                  </div>
+                  <p className="text-right text-[10px] text-muted-foreground">
+                    {currentYear} {formatTooltipCurrency(driver.currentYear)} vs{" "}
+                    {previousYear} {formatTooltipCurrency(driver.previousYear)}
+                  </p>
+                </div>
+              ))}
+              {point.differenceDrivers.length > visibleDrivers.length && (
+                <p className="text-right text-[10px] text-muted-foreground">
+                  +{point.differenceDrivers.length - visibleDrivers.length} more
+                  categories
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              No spend in either year on this day
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -269,6 +453,7 @@ export function SpendChart({
               <Tooltip
                 content={
                   <CustomTooltip
+                    data={data}
                     currentYear={currentYear}
                     previousYear={previousYear}
                     isMonthView={isMonthView}
@@ -309,7 +494,12 @@ export function SpendChart({
                 dataKey="currentYear"
                 stroke="oklch(0.55 0.15 250)"
                 strokeWidth={2.5}
-                dot={dotWhenHigher(data, "currentYear", { r: 2, fill: "oklch(0.55 0.15 250)" })}
+                dot={
+                  dotWhenHigher(data, "currentYear", {
+                    r: 2,
+                    fill: "oklch(0.55 0.15 250)",
+                  }) as any
+                }
                 activeDot={interactive ? { r: 5, strokeWidth: 2 } : { r: 4, strokeWidth: 2 }}
                 name="currentYear"
               />
@@ -318,7 +508,12 @@ export function SpendChart({
                 dataKey="previousYear"
                 stroke="oklch(0.60 0.18 20)"
                 strokeWidth={2.5}
-                dot={dotWhenHigher(data, "previousYear", { r: 2, fill: "oklch(0.60 0.18 20)" })}
+                dot={
+                  dotWhenHigher(data, "previousYear", {
+                    r: 2,
+                    fill: "oklch(0.60 0.18 20)",
+                  }) as any
+                }
                 activeDot={interactive ? { r: 5, strokeWidth: 2 } : { r: 4, strokeWidth: 2 }}
                 name="previousYear"
               />
