@@ -37,6 +37,7 @@ const MONTH_NAMES = [
 
 const CATEGORY_FILTER_STORAGE_KEY = "paisa_excluded_categories";
 const URL_PARAM_CATEGORIES = "categories";
+const URL_PARAM_MONTH = "month";
 /** Period separator so the param stays readable (commas get encoded as %2C). */
 const CATEGORIES_SEP = ".";
 
@@ -54,18 +55,19 @@ function loadExcludedCategories(): string[] {
   }
 }
 
-/** Build URL query string from included category indices (no param if all included). */
-function buildCategoriesQuery(excluded: string[], allCategoryNames: string[]): string {
-  if (allCategoryNames.length === 0) return "";
+/** Build categories param value from included category indices (null if all included). */
+function buildCategoriesParamValue(
+  excluded: string[],
+  allCategoryNames: string[]
+): string | null {
+  if (allCategoryNames.length === 0) return null;
   const excludedSet = new Set(excluded);
   const includedIndices: number[] = [];
   allCategoryNames.forEach((name, i) => {
     if (!excludedSet.has(name)) includedIndices.push(i);
   });
-  if (includedIndices.length === allCategoryNames.length) return "";
-  const params = new URLSearchParams();
-  params.set(URL_PARAM_CATEGORIES, includedIndices.join(CATEGORIES_SEP));
-  return `?${params.toString()}`;
+  if (includedIndices.length === allCategoryNames.length) return null;
+  return includedIndices.join(CATEGORIES_SEP);
 }
 
 /** Parse categories=0.1.3 into excluded category names using the full list. */
@@ -82,6 +84,15 @@ function parseCategoriesParam(
   const includedSet = new Set(indices.map((i) => allCategoryNames[i]));
   const excluded = allCategoryNames.filter((c) => !includedSet.has(c));
   return excluded;
+}
+
+function parseMonthParam(param: string | null): number | null {
+  if (param === null) return null;
+  const raw = param.trim().toLowerCase();
+  if (raw === "" || raw === "all") return null;
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 12) return null;
+  return parsed;
 }
 
 export function Dashboard() {
@@ -187,6 +198,11 @@ export function Dashboard() {
     }
   }, [searchParams, allCategoryNames]);
 
+  // Restore selected month from URL param (for bookmarks/shareable views).
+  useEffect(() => {
+    setSelectedMonth(parseMonthParam(searchParams.get(URL_PARAM_MONTH)));
+  }, [searchParams]);
+
   // When year selection changes, reset category filter (all included) and clear storage/URL
   useEffect(() => {
     if (prevYearsRef.current.yearA === yearA && prevYearsRef.current.yearB === yearB) return;
@@ -214,10 +230,39 @@ export function Dashboard() {
           // ignore quota or other storage errors
         }
       }
-      const query = buildCategoriesQuery(excluded, allCategoryNames);
-      router.replace(`${pathname}${query}`, { scroll: false });
+      const params = new URLSearchParams(searchParams.toString());
+      const categoriesParamValue = buildCategoriesParamValue(excluded, allCategoryNames);
+      if (categoriesParamValue === null) {
+        params.delete(URL_PARAM_CATEGORIES);
+      } else {
+        params.set(URL_PARAM_CATEGORIES, categoriesParamValue);
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
-    [router, pathname, allCategoryNames]
+    [router, pathname, allCategoryNames, searchParams]
+  );
+
+  const handleMonthChange = useCallback(
+    (value: string) => {
+      let nextMonth: number | null = null;
+      if (value !== "all") {
+        const parsed = parseInt(value, 10);
+        if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 12) {
+          nextMonth = parsed;
+        }
+      }
+      setSelectedMonth(nextMonth);
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextMonth === null) {
+        params.delete(URL_PARAM_MONTH);
+      } else {
+        params.set(URL_PARAM_MONTH, String(nextMonth));
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
   );
 
   const handleConnect = useCallback(async (key: string) => {
@@ -383,9 +428,7 @@ export function Dashboard() {
                 </Select>
                 <Select
                   value={selectedMonth === null ? "all" : String(selectedMonth)}
-                  onValueChange={(v) =>
-                    setSelectedMonth(v === "all" ? null : parseInt(v, 10))
-                  }
+                  onValueChange={handleMonthChange}
                 >
                   <SelectTrigger className="w-[160px]">
                     <SelectValue placeholder="All year" />
