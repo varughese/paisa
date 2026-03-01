@@ -22,6 +22,7 @@ export interface LunchMoneyTransaction {
   category_group_name: string | null;
   is_income: boolean;
   exclude_from_totals: boolean;
+  has_children?: boolean;
 }
 
 async function request<T>(

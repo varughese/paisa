@@ -25,7 +25,23 @@ import {
   fetchUser,
   fetchTransactions,
   type LunchMoneyUser,
+  type LunchMoneyTransaction,
 } from "@/lib/lunch-money-client";
+
+/** Filter Lunch Money transactions: drop has_children; optionally drop uncategorized (for previous year). */
+function filterLunchMoneyTransactions(
+  transactions: LunchMoneyTransaction[],
+  excludeUncategorizedInPreviousYear: boolean
+): Transaction[] {
+  return transactions.filter((t) => {
+    if (t.has_children === true) return false;
+    if (excludeUncategorizedInPreviousYear) {
+      const uncategorized = !t.category_name || t.category_name.trim() === "";
+      if (uncategorized) return false;
+    }
+    return true;
+  }) as Transaction[];
+}
 
 const thisYear = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 16 }, (_, i) => thisYear - i);
@@ -142,7 +158,7 @@ export function Dashboard() {
       : null,
     ([, key, start, end]: [string, string, string, string]) =>
       fetchTransactions(key, start, end).then((transactions) => ({
-        transactions,
+        transactions: filterLunchMoneyTransactions(transactions, false),
       })),
     { revalidateOnFocus: false }
   );
@@ -164,7 +180,7 @@ export function Dashboard() {
       : null,
     ([, key, start, end]: [string, string, string, string]) =>
       fetchTransactions(key, start, end).then((transactions) => ({
-        transactions,
+        transactions: filterLunchMoneyTransactions(transactions, true),
       })),
     { revalidateOnFocus: false }
   );

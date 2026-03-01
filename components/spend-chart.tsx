@@ -119,11 +119,10 @@ function TooltipYearSection({
       <div className="mt-1 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-[11px]">
         <span className="text-muted-foreground">vs previous day</span>
         <span
-          className={`text-right font-mono ${
-            vsPreviousDay == null
-              ? "text-muted-foreground"
-              : toneClassForDelta(vsPreviousDay)
-          }`}
+          className={`text-right font-mono ${vsPreviousDay == null
+            ? "text-muted-foreground"
+            : toneClassForDelta(vsPreviousDay)
+            }`}
         >
           {vsPreviousDay == null ? "—" : formatSignedCurrency(vsPreviousDay)}
         </span>
@@ -253,11 +252,10 @@ function CustomTooltip({
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">Diff vs previous day</span>
           <span
-            className={`font-mono text-xs font-semibold ${
-              differenceVsPreviousDay == null
-                ? "text-muted-foreground"
-                : toneClassForDelta(differenceVsPreviousDay)
-            }`}
+            className={`font-mono text-xs font-semibold ${differenceVsPreviousDay == null
+              ? "text-muted-foreground"
+              : toneClassForDelta(differenceVsPreviousDay)
+              }`}
           >
             {differenceVsPreviousDay == null
               ? "—"
@@ -388,13 +386,13 @@ export function SpendChart({
       ? { start: data[dragState.startIndex]?.day, end: data[dragState.endIndex]?.day }
       : selectedRange
         ? (() => {
-            const si = data.findIndex((d) => d.dateStr === selectedRange.start);
-            const ei = data.findIndex((d) => d.dateStr === selectedRange.end);
-            if (si < 0 || ei < 0) return null;
-            const lo = Math.min(si, ei);
-            const hi = Math.max(si, ei);
-            return { start: data[lo]?.day, end: data[hi]?.day };
-          })()
+          const si = data.findIndex((d) => d.dateStr === selectedRange.start);
+          const ei = data.findIndex((d) => d.dateStr === selectedRange.end);
+          if (si < 0 || ei < 0) return null;
+          const lo = Math.min(si, ei);
+          const hi = Math.max(si, ei);
+          return { start: data[lo]?.day, end: data[hi]?.day };
+        })()
         : null;
 
   return (
@@ -492,28 +490,18 @@ export function SpendChart({
               <Line
                 type="monotone"
                 dataKey="currentYear"
-                stroke="oklch(0.55 0.15 250)"
+                stroke="#dc2626"
                 strokeWidth={2.5}
-                dot={
-                  dotWhenHigher(data, "currentYear", {
-                    r: 2,
-                    fill: "oklch(0.55 0.15 250)",
-                  }) as any
-                }
+                dot={dotWhenHigher(data, "currentYear", { r: 2, fill: "#dc2626" }) as any}
                 activeDot={interactive ? { r: 5, strokeWidth: 2 } : { r: 4, strokeWidth: 2 }}
                 name="currentYear"
               />
               <Line
                 type="monotone"
                 dataKey="previousYear"
-                stroke="oklch(0.60 0.18 20)"
+                stroke="#525252"
                 strokeWidth={2.5}
-                dot={
-                  dotWhenHigher(data, "previousYear", {
-                    r: 2,
-                    fill: "oklch(0.60 0.18 20)",
-                  }) as any
-                }
+                dot={dotWhenHigher(data, "previousYear", { r: 2, fill: "#525252" }) as any}
                 activeDot={interactive ? { r: 5, strokeWidth: 2 } : { r: 4, strokeWidth: 2 }}
                 name="previousYear"
               />
