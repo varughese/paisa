@@ -18,8 +18,30 @@ export interface DailyData {
   day: number;
   currentYear: number;
   previousYear: number;
+  /** Non-cumulative spend posted on this day for current year. */
+  currentDaySpend: number;
+  /** Non-cumulative spend posted on this day for previous year. */
+  previousDaySpend: number;
+  /** Per-category spend on this day for current year, sorted desc by amount. */
+  currentDayCategoryBreakdown: DailyCategoryBreakdown[];
+  /** Per-category spend on this day for previous year, sorted desc by amount. */
+  previousDayCategoryBreakdown: DailyCategoryBreakdown[];
+  /** Per-category difference drivers for this day (current - previous), sorted by impact. */
+  differenceDrivers: DailyDifferenceDriver[];
   /** Present when the day maps to a single date (for filtering transactions). */
   dateStr?: string;
+}
+
+export interface DailyCategoryBreakdown {
+  name: string;
+  amount: number;
+}
+
+export interface DailyDifferenceDriver {
+  name: string;
+  currentYear: number;
+  previousYear: number;
+  difference: number;
 }
 
 export interface CategorySpend {
@@ -51,6 +73,8 @@ export interface SpendSummary {
   /** All category names that have spend (for filter UI) */
   allCategoryNames: string[];
   currentWeek: number;
+  /** Total comparable weeks in view (52 for year view, 5 for month view). */
+  totalWeeksInView: number;
   currentYearWeeklyAvg: number;
   previousYearWeeklyAvg: number;
   /** When set, data is for this month only (1-12) */
@@ -112,6 +136,44 @@ function filterByMonth(tx: Transaction[], year: number, month: number): Transact
     const d = new Date(t.date + "T12:00:00");
     return d.getFullYear() === year && d.getMonth() + 1 === month;
   });
+}
+
+function toDailyCategoryBreakdown(
+  dayCategorySpend: Record<string, number>
+): DailyCategoryBreakdown[] {
+  return Object.entries(dayCategorySpend)
+    .map(([name, amount]) => ({ name, amount: Math.round(amount) }))
+    .filter((entry) => entry.amount > 0)
+    .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+}
+
+function toDifferenceDrivers(
+  currentDayCategorySpend: Record<string, number>,
+  previousDayCategorySpend: Record<string, number>
+): DailyDifferenceDriver[] {
+  const categoryNames = new Set<string>([
+    ...Object.keys(currentDayCategorySpend),
+    ...Object.keys(previousDayCategorySpend),
+  ]);
+
+  return [...categoryNames]
+    .map((name) => {
+      const currentYear = Math.round(currentDayCategorySpend[name] || 0);
+      const previousYear = Math.round(previousDayCategorySpend[name] || 0);
+      return {
+        name,
+        currentYear,
+        previousYear,
+        difference: currentYear - previousYear,
+      };
+    })
+    .filter((entry) => entry.currentYear > 0 || entry.previousYear > 0)
+    .sort(
+      (a, b) =>
+        Math.abs(b.difference) - Math.abs(a.difference) ||
+        b.currentYear + b.previousYear - (a.currentYear + a.previousYear) ||
+        a.name.localeCompare(b.name)
+    );
 }
 
 export function processTransactions(
@@ -223,6 +285,8 @@ export function processTransactions(
   // Accumulate daily spend (day = day of year or day of month)
   const currentDaily: Record<number, number> = {};
   const previousDaily: Record<number, number> = {};
+  const currentDailyByCategory: Record<number, Record<string, number>> = {};
+  const previousDailyByCategory: Record<number, Record<string, number>> = {};
 
   const getDay = month
     ? (dateStr: string) => getDayOfMonth(dateStr)
@@ -238,22 +302,28 @@ export function processTransactions(
 
   for (const tx of currentExpenses) {
     const day = getDay(tx.date);
-    if (day >= 1 && day <= maxDays) {
-      const amount = Math.abs(parseFloat(tx.amount));
-      currentDaily[day] = (currentDaily[day] || 0) + amount;
-    }
+    const amount = Math.abs(parseFloat(tx.amount));
     const cat = tx.category_name || "Uncategorized";
-    currentCategorySpend[cat] = (currentCategorySpend[cat] || 0) + Math.abs(parseFloat(tx.amount));
+    if (day >= 1 && day <= maxDays) {
+      currentDaily[day] = (currentDaily[day] || 0) + amount;
+      if (!currentDailyByCategory[day]) currentDailyByCategory[day] = {};
+      currentDailyByCategory[day][cat] =
+        (currentDailyByCategory[day][cat] || 0) + amount;
+    }
+    currentCategorySpend[cat] = (currentCategorySpend[cat] || 0) + amount;
   }
 
   for (const tx of previousExpenses) {
     const day = getDayPrev(tx.date);
-    if (day >= 1 && day <= maxDays) {
-      const amount = Math.abs(parseFloat(tx.amount));
-      previousDaily[day] = (previousDaily[day] || 0) + amount;
-    }
+    const amount = Math.abs(parseFloat(tx.amount));
     const cat = tx.category_name || "Uncategorized";
-    previousCategorySpend[cat] = (previousCategorySpend[cat] || 0) + Math.abs(parseFloat(tx.amount));
+    if (day >= 1 && day <= maxDays) {
+      previousDaily[day] = (previousDaily[day] || 0) + amount;
+      if (!previousDailyByCategory[day]) previousDailyByCategory[day] = {};
+      previousDailyByCategory[day][cat] =
+        (previousDailyByCategory[day][cat] || 0) + amount;
+    }
+    previousCategorySpend[cat] = (previousCategorySpend[cat] || 0) + amount;
   }
 
   // Build cumulative daily data with dateStr for tooltip/click (full year; current year flat after today)
@@ -263,6 +333,19 @@ export function processTransactions(
   let totalCurrentYearValue = 0;
 
   for (let day = 1; day <= totalDaysInView; day++) {
+    const currentDaySpend = Math.round(currentDaily[day] || 0);
+    const previousDaySpend = Math.round(previousDaily[day] || 0);
+    const currentDayCategoryBreakdown = toDailyCategoryBreakdown(
+      currentDailyByCategory[day] || {}
+    );
+    const previousDayCategoryBreakdown = toDailyCategoryBreakdown(
+      previousDailyByCategory[day] || {}
+    );
+    const differenceDrivers = toDifferenceDrivers(
+      currentDailyByCategory[day] || {},
+      previousDailyByCategory[day] || {}
+    );
+
     if (day <= currentDayNum || !isCurrentYear) {
       cumulativeCurrent += currentDaily[day] || 0;
       if (day === currentDayNum && isCurrentYear) totalCurrentYearValue = cumulativeCurrent;
@@ -275,6 +358,11 @@ export function processTransactions(
       day,
       currentYear: Math.round(cumulativeCurrent),
       previousYear: Math.round(cumulativePrevious),
+      currentDaySpend,
+      previousDaySpend,
+      currentDayCategoryBreakdown,
+      previousDayCategoryBreakdown,
+      differenceDrivers,
       dateStr,
     });
   }
@@ -362,6 +450,7 @@ export function processTransactions(
     topCategories,
     allCategoryNames,
     currentWeek: currentWeekNum,
+    totalWeeksInView: totalWeeksForAvg,
     currentYearWeeklyAvg: Math.round(currentYearWeeklyAvg),
     previousYearWeeklyAvg: Math.round(previousYearWeeklyAvg),
     month,
