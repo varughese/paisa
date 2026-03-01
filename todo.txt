@@ -1,2 +1,4 @@
 - i want categories to be clickable underneath the chart with totals
 - i want it easier to click in and show insights there
+- i think it is incorrectly dealing with split transacions
+- weird behavior w uncategorized
